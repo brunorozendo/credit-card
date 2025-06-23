@@ -1,0 +1,19 @@
+{
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "email": "jane.smith@example.com",
+  "phoneNumber": "+19876543210",
+  "ssn": "987-65-4321",
+  "dateOfBirth": "1985-06-15",
+  "address": {
+    "streetAddress": "456 Oak Avenue",
+    "city": "Los Angeles",
+    "state": "CA",
+    "zipCode": "90001",
+    "country": "USA"
+  },
+  "annualIncome": 120000,
+  "employmentStatus": "FULL_TIME",
+  "requestedLimit": 15000,
+  "cardType": "PLATINUM"
+}

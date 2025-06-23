@@ -1,0 +1,19 @@
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe@example.com",
+  "phoneNumber": "+1234567890",
+  "ssn": "123-45-6789",
+  "dateOfBirth": "1990-01-01",
+  "address": {
+    "streetAddress": "123 Main Street",
+    "city": "New York",
+    "state": "NY",
+    "zipCode": "10001",
+    "country": "USA"
+  },
+  "annualIncome": 75000,
+  "employmentStatus": "FULL_TIME",
+  "requestedLimit": 5000,
+  "cardType": "GOLD"
+}

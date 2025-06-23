@@ -1,0 +1,19 @@
+{
+  "firstName": "Alice",
+  "lastName": "Johnson",
+  "email": "alice.johnson@example.com",
+  "phoneNumber": "+15551234567",
+  "ssn": "555-12-3456",
+  "dateOfBirth": "1980-03-20",
+  "address": {
+    "streetAddress": "789 Park Boulevard",
+    "city": "San Francisco",
+    "state": "CA",
+    "zipCode": "94102",
+    "country": "USA"
+  },
+  "annualIncome": 150000,
+  "employmentStatus": "FULL_TIME",
+  "requestedLimit": 10000,
+  "cardType": "PLATINUM"
+}

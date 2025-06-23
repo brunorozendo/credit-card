@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack-credit-card
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,rds,ecs,ec2,iam,logs,secretsmanager,elasticloadbalancingv2
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - localstack-network
+
+  postgres-local:
+    image: postgres:15-alpine
+    container_name: creditcard-postgres-local
+    environment:
+      POSTGRES_DB: creditcard_db
+      POSTGRES_USER: creditcard_user
+      POSTGRES_PASSWORD: creditcard_pass
+    ports:
+      - "5433:5432"
+    networks:
+      - localstack-network
+
+networks:
+  localstack-network:
+    driver: bridge

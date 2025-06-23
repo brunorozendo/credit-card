@@ -1,0 +1,140 @@
+plugins {
+    id 'java'
+    id 'groovy'
+    id 'org.springframework.boot' version '3.5.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+}
+
+group = 'com.bank'
+version = '1.0.0'
+java{
+    targetCompatibility = '21'
+    sourceCompatibility = '21'
+}
+
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot dependencies
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // Database
+    implementation 'org.postgresql:postgresql'
+    implementation 'org.flywaydb:flyway-core:11.9.1'
+    implementation 'org.flywaydb:flyway-database-postgresql:11.9.1'
+    
+    // Documentation
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    
+    // Utilities
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    
+    // HTTP Client
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // Test dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'com.h2database:h2'
+    
+    // Spock Framework
+    testImplementation platform('org.spockframework:spock-bom:2.4-M6-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testImplementation 'org.spockframework:spock-spring'
+
+    // Spock reports
+    testImplementation "com.athaydes:spock-reports:2.5.1-groovy-4.0"
+    
+    // Testcontainers
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:postgresql:1.19.3'
+    testImplementation 'org.testcontainers:spock:1.19.3'
+}
+
+
+// Configure Groovy compilation
+compileTestGroovy {
+    classpath = sourceSets.test.compileClasspath
+}
+
+// JaCoCo configuration
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    '**/config/**',
+                    '**/CreditCardApplication.class',
+                    '**/model/**',
+                    '**/dto/**',
+                    '**/exception/**'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.90
+            }
+        }
+        
+        rule {
+            element = 'CLASS'
+            excludes = [
+                    'com.bank.creditcard.config.*',
+                    'com.bank.creditcard.CreditCardApplication',
+                    'com.bank.creditcard.model.*',
+                    'com.bank.creditcard.dto.*',
+                    'com.bank.creditcard.exception.*'
+            ]
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+        }
+    }
+}
+
+test{
+    useJUnitPlatform()
+    testLogging {
+        //events "FAILED","PASSED","SKIPPED","STANDARD_ERROR","STANDARD_OUT","STARTED"
+        events "FAILED","PASSED","SKIPPED"
+    }
+    finalizedBy jacocoTestReport // Generate report after tests run
+}
+
+check {
+    dependsOn jacocoTestCoverageVerification
+}
