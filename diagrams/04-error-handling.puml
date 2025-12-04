@@ -1,0 +1,141 @@
+@startuml Error Handling Flows
+title Credit Card Application Error Handling Flows
+
+actor "Customer" as customer
+participant "API Gateway" as api
+participant "Global\nException Handler" as handler
+participant "Application\nController" as controller
+participant "Application\nService" as service
+participant "Validation" as validator
+
+== Validation Error Flow ==
+
+customer -> api: POST /api/v1/credit-card-applications\n{invalid data}
+activate api
+
+api -> controller: submitApplication(request)
+activate controller
+
+controller -> validator: @Valid validation
+activate validator
+
+validator -> validator: Check constraints:\n- @NotBlank\n- @Email\n- @Pattern\n- @DecimalMin/Max\n- @Past
+
+validator --> controller: MethodArgumentNotValidException
+deactivate validator
+
+controller -> handler: handleValidationExceptions(ex)
+activate handler
+
+handler -> handler: Extract field errors
+handler -> handler: Build error map
+
+handler --> controller: ProblemDetail {\n  status: 400,\n  title: "Validation Error",\n  errors: {field: message}\n}
+deactivate handler
+
+controller --> api: 400 Bad Request
+deactivate controller
+
+api --> customer: Validation Error Response
+deactivate api
+
+note right of customer: Example errors:\n- "email": "Valid email required"\n- "ssn": "SSN must be XXX-XX-XXXX"\n- "annualIncome": "Must be positive"
+
+== Duplicate Application Error ==
+
+customer -> api: POST /api/v1/credit-card-applications\n{duplicate SSN}
+activate api
+
+api -> controller: submitApplication(request)
+activate controller
+
+controller -> service: submitApplication(request)
+activate service
+
+service -> service: Check for existing\npending application
+
+service --> controller: throw DuplicateApplicationException
+deactivate service
+
+controller -> handler: handleDuplicateApplicationException(ex)
+activate handler
+
+handler --> controller: ProblemDetail {\n  status: 409,\n  title: "Duplicate Application",\n  detail: "Pending application exists"\n}
+deactivate handler
+
+controller --> api: 409 Conflict
+deactivate controller
+
+api --> customer: Duplicate Application Error
+deactivate api
+
+== Resource Not Found Error ==
+
+customer -> api: GET /api/v1/credit-card-applications/INVALID-123
+activate api
+
+api -> controller: getApplication("INVALID-123")
+activate controller
+
+controller -> service: getApplication("INVALID-123")
+activate service
+
+service -> service: Repository returns empty
+
+service --> controller: throw ResourceNotFoundException
+deactivate service
+
+controller -> handler: handleResourceNotFoundException(ex)
+activate handler
+
+handler --> controller: ProblemDetail {\n  status: 404,\n  title: "Resource Not Found",\n  detail: "Application not found"\n}
+deactivate handler
+
+controller --> api: 404 Not Found
+deactivate controller
+
+api --> customer: Not Found Error
+deactivate api
+
+== Authentication Error ==
+
+customer -> api: GET /api/v1/credit-card-applications/pending\n(no credentials)
+activate api
+
+api -> api: Security Filter Chain
+
+api --> customer: 401 Unauthorized\n"Authentication required"
+deactivate api
+
+== System Error ==
+
+customer -> api: POST /api/v1/credit-card-applications\n{valid data}
+activate api
+
+api -> controller: submitApplication(request)
+activate controller
+
+controller -> service: submitApplication(request)
+activate service
+
+service -> service: Database connection error\nor unexpected exception
+
+service --> controller: throw RuntimeException
+deactivate service
+
+controller -> handler: handleGenericException(ex)
+activate handler
+
+handler -> handler: Log error details
+handler --> controller: ProblemDetail {\n  status: 500,\n  title: "Internal Server Error",\n  detail: "An unexpected error occurred"\n}
+deactivate handler
+
+controller --> api: 500 Internal Server Error
+deactivate controller
+
+api --> customer: System Error Response
+deactivate api
+
+note over handler: All error responses include:\n- HTTP status code\n- Error title\n- Error detail\n- Timestamp\n- No stack traces in production
+
+@enduml

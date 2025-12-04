@@ -1,0 +1,126 @@
+@startuml System Architecture
+!theme blueprint
+title Credit Card Application System - Component Architecture
+
+package "Frontend Layer" {
+    [Web Portal] as web
+    [Mobile App] as mobile
+    [Admin Dashboard] as admin
+}
+
+package "API Gateway" {
+    [API Gateway/\nLoad Balancer] as gateway
+    note right of gateway: - Authentication\n- Rate limiting\n- Request routing\n- SSL termination
+}
+
+package "Application Layer" {
+    component "Credit Card\nApplication Service" as appService {
+        [REST Controllers] as controllers
+        [Business Services] as services
+        [Data Mappers] as mappers
+        [Exception Handlers] as handlers
+    }
+    
+    component "Background Jobs" as jobs {
+        [Async Processor] as async
+        [Scheduled Tasks] as scheduled
+    }
+}
+
+package "Business Logic Layer" {
+    [Compliance Service] as compliance
+    [Risk Assessment Service] as risk
+    [Decision Engine] as decision
+    [Notification Service] as notify
+}
+
+package "Integration Layer" {
+    [Credit Bureau Client] as bureau
+    [KYC Provider Client] as kyc
+    [AML Service Client] as aml
+    [Card Issuer Client] as issuer
+}
+
+package "Data Layer" {
+    database "PostgreSQL\nDatabase" as db {
+        rectangle "customers" as customers
+        rectangle "applications" as applications
+        rectangle "audit_logs" as audit
+    }
+    
+    [Repository Layer] as repos
+}
+
+package "External Services" {
+    cloud "Credit Bureaus" as bureaus {
+        [Experian API]
+        [Equifax API]
+        [TransUnion API]
+    }
+    
+    cloud "Compliance APIs" as complianceAPIs {
+        [OFAC Check]
+        [PEP Database]
+        [AML Service]
+    }
+    
+    cloud "Card Network" as network {
+        [Visa/Mastercard]
+        [Card Processor]
+    }
+}
+
+package "Infrastructure" {
+    [AWS ECS Fargate] as ecs
+    [Application Load Balancer] as alb
+    [AWS RDS] as rds
+    [AWS Secrets Manager] as secrets
+    [CloudWatch Logs] as logs
+    [AWS VPC] as vpc
+}
+
+' Frontend connections
+web --> gateway
+mobile --> gateway
+admin --> gateway
+
+' API Gateway to Services
+gateway --> controllers
+
+' Controller to Service connections
+controllers --> services
+controllers --> handlers
+
+' Service layer connections
+services --> mappers
+services --> repos
+services --> async
+services --> compliance
+services --> risk
+services --> decision
+services --> notify
+
+' Repository to Database
+repos --> db
+
+' Business logic connections
+compliance --> kyc
+compliance --> aml
+risk --> bureau
+decision --> services
+notify --> services
+
+' External service connections
+bureau ..> bureaus : HTTPS
+kyc ..> complianceAPIs : HTTPS
+aml ..> complianceAPIs : HTTPS
+issuer ..> network : HTTPS
+
+' Infrastructure connections
+appService -[hidden]-> ecs
+db -[hidden]-> rds
+gateway -[hidden]-> alb
+
+note bottom of vpc: All components run within\nAWS VPC for security
+
+@enduml

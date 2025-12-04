@@ -1,0 +1,175 @@
+@startuml AWS Deployment Architecture
+title Credit Card Application - AWS Deployment Architecture
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v20.0/dist
+
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/AWSSimplified.puml
+
+' Compute
+!include AWSPuml/Compute/EC2.puml
+!include AWSPuml/Containers/ElasticContainerService.puml
+!include AWSPuml/Containers/Fargate.puml
+!include AWSPuml/Containers/ElasticContainerRegistry.puml
+
+' Database
+!include AWSPuml/Database/RDS.puml
+!include AWSPuml/Database/RDSMultiAZ.puml
+
+' Networking
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancing.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
+!include AWSPuml/NetworkingContentDelivery/Route53.puml
+!include AWSPuml/NetworkingContentDelivery/VirtualPrivateCloud.puml
+!include AWSPuml/NetworkingContentDelivery/VPCNATGateway.puml
+!include AWSPuml/NetworkingContentDelivery/VPCInternetGateway.puml
+
+' Storage
+!include AWSPuml/Storage/SimpleStorageService.puml
+
+' Security & Management
+!include AWSPuml/SecurityIdentityCompliance/SecretsManager.puml
+!include AWSPuml/ManagementGovernance/CloudWatch.puml
+
+' General
+!include AWSPuml/General/Client.puml
+!include AWSPuml/General/Internet.puml
+!include AWSPuml/General/Users.puml
+
+' Groups
+!include AWSPuml/Groups/AWSCloud.puml
+!include AWSPuml/Groups/VPC.puml
+!include AWSPuml/Groups/PublicSubnet.puml
+!include AWSPuml/Groups/PrivateSubnet.puml
+!include AWSPuml/Groups/Region.puml
+
+' Define participants
+Users(users, "Users", "Web/Mobile Clients")
+Internet(internet, "Internet", "Public Network")
+
+AWSCloudGroup(aws) {
+    RegionGroup(us_east_1, "US East 1") {
+
+        Route53(route53, "Route 53", "DNS Service")
+
+        VPCGroup(vpc, "VPC (10.0.0.0/16)") {
+
+            VPCInternetGateway(igw, "Internet Gateway", "IGW")
+
+            PublicSubnetGroup(pub_sub_1, "Public Subnet 1\n10.0.1.0/24") {
+                ElasticLoadBalancingApplicationLoadBalancer(alb1, "Application\nLoad Balancer", "ALB")
+                VPCNATGateway(nat1, "NAT Gateway 1", "NAT")
+            }
+
+            PublicSubnetGroup(pub_sub_2, "Public Subnet 2\n10.0.2.0/24") {
+                ElasticLoadBalancingApplicationLoadBalancer(alb2, "Application\nLoad Balancer", "ALB (Standby)")
+                VPCNATGateway(nat2, "NAT Gateway 2", "NAT")
+            }
+
+            PrivateSubnetGroup(priv_sub_1, "Private Subnet 1\n10.0.11.0/24") {
+                Fargate(ecs1, "ECS Fargate", "Credit Card Service\nTask 1")
+            }
+
+            PrivateSubnetGroup(priv_sub_2, "Private Subnet 2\n10.0.12.0/24") {
+                Fargate(ecs2, "ECS Fargate", "Credit Card Service\nTask 2")
+            }
+
+            PrivateSubnetGroup(db_sub_1, "Database Subnet 1\n10.0.21.0/24") {
+                RDS(rds_primary, "RDS Primary", "PostgreSQL 15")
+            }
+
+            PrivateSubnetGroup(db_sub_2, "Database Subnet 2\n10.0.22.0/24") {
+                RDS(rds_standby, "RDS Standby", "PostgreSQL 15\nMulti-AZ")
+            }
+        }
+
+        ' AWS Services outside VPC
+        ElasticContainerRegistry(ecr, "ECR", "Container Registry")
+        CloudWatch(cloudwatch, "CloudWatch", "Monitoring & Logs")
+        SecretsManager(secrets, "Secrets Manager", "Credentials Store")
+        SimpleStorageService(s3, "S3", "Object Storage")
+    }
+}
+
+' Connections
+users -r-> internet : HTTPS
+internet -r-> route53 : DNS Query
+route53 -d-> igw : Route Traffic
+igw -d-> alb1 : HTTPS (443)
+igw -d-> alb2 : HTTPS (443)
+
+alb1 -d-> ecs1 : "Target Group\nPort 8080"
+alb2 -d-> ecs2 : "Target Group\nPort 8080"
+
+ecs1 -u-> nat1 : Outbound
+ecs2 -u-> nat2 : Outbound
+nat1 -u-> igw : External APIs
+nat2 -u-> igw : External APIs
+
+ecs1 -d-> rds_primary : "PostgreSQL\nPort 5432"
+ecs2 -d-> rds_primary : "PostgreSQL\nPort 5432"
+rds_primary <..> rds_standby : "Synchronous\nReplication"
+
+ecs1 -r-> secrets : "Get DB\nCredentials"
+ecs2 -l-> secrets : "Get DB\nCredentials"
+
+ecs1 -r-> cloudwatch : "Logs &\nMetrics"
+ecs2 -l-> cloudwatch : "Logs &\nMetrics"
+
+ecr -l-> ecs1 : "Pull Docker\nImage"
+ecr -l-> ecs2 : "Pull Docker\nImage"
+
+ecs1 -r-> s3 : "Store\nAudit Logs"
+ecs2 -l-> s3 : "Store\nAudit Logs"
+
+' Notes
+note bottom of vpc
+**Security Groups Configuration**
+====
+**ALB Security Group**
+- Inbound: 443 from 0.0.0.0/0
+- Outbound: 8080 to ECS SG
+
+**ECS Security Group**
+- Inbound: 8080 from ALB SG
+- Outbound: 443 to 0.0.0.0/0
+- Outbound: 5432 to RDS SG
+
+**RDS Security Group**
+- Inbound: 5432 from ECS SG
+- Outbound: None
+
+**NAT Gateway**
+- Managed by AWS
+- Allow all outbound
+end note
+
+note right of s3
+**S3 Buckets**
+====
+- credit-card-app-logs
+- credit-card-audit-trails
+- credit-card-db-backups
+- credit-card-app-configs
+end note
+
+note left of secrets
+**Secrets Manager**
+====
+**Stored Secrets:**
+- RDS Master Password
+- Database Connection String
+- JWT Secret Key
+- API Keys (if any)
+- SSL Certificates
+end note
+
+note right of ecr
+**Container Images**
+====
+- credit-card-service:latest
+- credit-card-service:v1.0.0
+- credit-card-service:v1.1.0
+end note
+
+@enduml

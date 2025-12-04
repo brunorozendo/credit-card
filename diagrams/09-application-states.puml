@@ -1,0 +1,53 @@
+@startuml Application State Diagram
+title Credit Card Application State Transitions
+
+[*] --> DRAFT : Customer starts\napplication
+
+DRAFT : Application data\nbeing entered
+DRAFT --> PENDING : Submit application
+DRAFT --> [*] : Abandon
+
+PENDING : Application submitted\nawaiting processing
+PENDING --> IN_REVIEW : Processing starts
+PENDING --> CANCELLED : Customer cancels
+
+IN_REVIEW : Automated checks\nin progress
+IN_REVIEW --> APPROVED : All checks pass\nRisk acceptable
+IN_REVIEW --> REJECTED : Checks fail or\nHigh risk
+IN_REVIEW --> MANUAL_REVIEW : Borderline case
+
+MANUAL_REVIEW : Human review\nrequired
+MANUAL_REVIEW --> APPROVED : Manual approval
+MANUAL_REVIEW --> REJECTED : Manual rejection
+
+APPROVED : Application approved\nCard will be issued
+APPROVED --> CARD_ISSUED : Card created\nand shipped
+APPROVED --> CANCELLED : Customer declines\noffer
+
+REJECTED : Application denied
+REJECTED --> [*] : Process ends
+
+CANCELLED : Application cancelled\nby customer
+CANCELLED --> [*] : Process ends
+
+CARD_ISSUED : Card sent\nto customer
+CARD_ISSUED --> ACTIVATED : Customer activates\ncard
+CARD_ISSUED --> EXPIRED : Card not activated\nwithin 30 days
+
+ACTIVATED : Card active\nand usable
+ACTIVATED --> [*] : Normal end
+
+EXPIRED : Card expired\nunactivated
+EXPIRED --> [*] : Process ends
+
+note right of PENDING : Average time: 0-5 minutes\nAsync processing begins
+
+note right of IN_REVIEW : Average time: 1-2 minutes\n- Compliance checks\n- Credit bureau check\n- Risk assessment
+
+note right of APPROVED : Valid for 30 days\nCustomer must accept
+
+note left of REJECTED : Reasons:\n- Low credit score (<580)\n- High risk score (>75)\n- Compliance failure\n- Income insufficient
+
+note bottom : **Notification Points**\n- PENDING → Email confirmation\n- APPROVED → Congratulations email\n- REJECTED → Explanation email\n- CARD_ISSUED → Shipping notification\n- ACTIVATED → Welcome packet
+
+@enduml

@@ -1,0 +1,129 @@
+@startuml Compliance Check Flow
+title Compliance Check Flow
+
+participant "Application\nService" as service
+participant "Compliance\nService" as compliance
+participant "Customer" as customer
+database "Sanctions\nDatabase" as sanctions
+database "PEP\nDatabase" as pep
+
+== Compliance Check Process ==
+
+service -> compliance: performComplianceCheck(customer)
+activate compliance
+
+compliance -> compliance: Create ComplianceCheckResult
+
+== KYC (Know Your Customer) Check ==
+
+compliance -> customer: isIdentityVerified()
+activate customer
+customer --> compliance: boolean
+deactivate customer
+
+compliance -> customer: getSsn()
+activate customer
+customer --> compliance: ssn
+deactivate customer
+
+compliance -> customer: getAddress()
+activate customer
+customer --> compliance: address
+deactivate customer
+
+compliance -> compliance: **KYC Verification**
+note right
+Check:
+✓ Identity verified flag
+✓ SSN is not null
+✓ Address is not null
+
+Result: kycPassed = true/false
+end note
+
+alt KYC Failed
+    compliance -> compliance: result.kycPassed = false
+    compliance -> compliance: result.reason += "KYC incomplete"
+end
+
+== AML (Anti-Money Laundering) Check ==
+
+compliance -> compliance: **performAmlCheck()**
+note right
+Mock implementation:
+- 95% pass rate
+- Random check
+- In production would check:
+  • Transaction patterns
+  • Source of funds
+  • Unusual activity
+end note
+
+compliance -> compliance: random.nextDouble() > 0.05
+
+alt AML Failed
+    compliance -> compliance: result.amlPassed = false
+    compliance -> compliance: result.reason += "AML check failed"
+end
+
+== Sanctions Check ==
+
+compliance -> customer: getFullName()
+activate customer
+customer --> compliance: "FIRSTNAME LASTNAME"
+deactivate customer
+
+compliance -> sanctions: **Check Sanctioned Names**
+activate sanctions
+note right: Sanctioned list:\n- "SANCTIONED PERSON ONE"\n- "SANCTIONED COMPANY TWO"\n- "BANNED INDIVIDUAL THREE"
+
+sanctions --> compliance: match found?
+deactivate sanctions
+
+compliance -> compliance: sanctionedNames.stream()\n.noneMatch(name.contains)
+
+alt Sanctions Match Found
+    compliance -> compliance: result.sanctionCheckPassed = false
+    compliance -> compliance: result.reason += "Sanctions match"
+end
+
+== PEP (Politically Exposed Person) Check ==
+
+compliance -> pep: **Check PEP List**
+activate pep
+note right: PEP list:\n- "POLITICAL FIGURE ONE"\n- "GOVERNMENT OFFICIAL TWO"\n- "PUBLIC SERVANT THREE"
+
+pep --> compliance: match found?
+deactivate pep
+
+compliance -> compliance: pepNames.stream()\n.noneMatch(name.contains)
+
+alt PEP Match Found
+    compliance -> compliance: result.pepCheckPassed = false
+    compliance -> compliance: result.reason += "PEP match found"
+end
+
+== Final Result ==
+
+compliance -> compliance: **Determine Overall Result**
+note right
+overallPassed = 
+  kycPassed AND
+  amlPassed AND
+  sanctionCheckPassed AND
+  pepCheckPassed
+end note
+
+compliance --> service: ComplianceCheckResult {\n  kycPassed: boolean,\n  amlPassed: boolean,\n  sanctionCheckPassed: boolean,\n  pepCheckPassed: boolean,\n  overallPassed: boolean,\n  reason: string\n}
+deactivate compliance
+
+alt Compliance Failed
+    service -> service: rejectApplication(result.reason)
+    note right: Application rejected\ndue to compliance failure
+else Compliance Passed
+    service -> service: Continue to Credit Bureau Check
+end
+
+note over compliance: In production:\n- Real-time API calls\n- Multiple data sources\n- Regulatory reporting\n- Audit trail
+
+@enduml

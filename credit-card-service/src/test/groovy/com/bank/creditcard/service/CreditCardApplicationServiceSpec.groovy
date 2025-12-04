@@ -37,6 +37,7 @@ class CreditCardApplicationServiceSpec extends Specification {
     def "should submit credit card application successfully"() {
         given: "a valid application request"
         def request = createValidApplicationRequest()
+        and: "Setup a new customer and application"
         def customer = createCustomer()
         def application = createApplication(customer)
         

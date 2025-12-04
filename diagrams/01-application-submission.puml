@@ -1,0 +1,100 @@
+@startuml Credit Card Application Submission
+title Credit Card Application Submission Flow
+
+actor "Customer" as customer
+participant "API Gateway" as api
+participant "Application\nController" as controller
+participant "Application\nService" as service
+participant "Customer\nRepository" as custRepo
+participant "Application\nRepository" as appRepo
+database "PostgreSQL\nDatabase" as db
+queue "Async\nProcessor" as async
+
+== Application Submission ==
+
+customer -> api: POST /api/v1/credit-card-applications\n{application data}
+activate api
+
+api -> controller: submitApplication(request)
+activate controller
+
+controller -> controller: @Valid validation
+note right: Validates:\n- Required fields\n- Email format\n- SSN format\n- Phone format\n- Income > 0\n- Age >= 18
+
+alt Validation Failed
+    controller --> api: 400 Bad Request\n{validation errors}
+    api --> customer: Error Response
+else Validation Passed
+    controller -> service: submitApplication(request)
+    activate service
+    
+    service -> appRepo: existsByCustomerSsnAndStatus(ssn, PENDING)
+    activate appRepo
+    appRepo -> db: SELECT COUNT(*) FROM applications\nWHERE ssn = ? AND status = 'PENDING'
+    activate db
+    db --> appRepo: count
+    deactivate db
+    appRepo --> service: exists: boolean
+    deactivate appRepo
+    
+    alt Duplicate Pending Application
+        service --> controller: throw DuplicateApplicationException
+        controller --> api: 409 Conflict\n"Pending application exists"
+        api --> customer: Error Response
+    else No Duplicate
+        service -> custRepo: findBySsn(ssn)
+        activate custRepo
+        custRepo -> db: SELECT * FROM customers WHERE ssn = ?
+        activate db
+        db --> custRepo: customer data
+        deactivate db
+        custRepo --> service: Optional<Customer>
+        deactivate custRepo
+        
+        alt Customer Not Found
+            service -> service: mapper.toCustomer(request)
+            service -> custRepo: save(newCustomer)
+            activate custRepo
+            custRepo -> db: INSERT INTO customers...
+            activate db
+            db --> custRepo: saved customer
+            deactivate db
+            custRepo --> service: Customer
+            deactivate custRepo
+        else Customer Exists
+            service -> service: Use existing customer
+        end
+        
+        service -> service: mapper.toEntity(request)
+        service -> service: application.setCustomer(customer)
+        service -> service: application.setStatus(PENDING)
+        service -> service: generateApplicationNumber()
+        
+        service -> appRepo: save(application)
+        activate appRepo
+        appRepo -> db: INSERT INTO credit_card_applications...
+        activate db
+        db --> appRepo: saved application
+        deactivate db
+        appRepo --> service: CreditCardApplication
+        deactivate appRepo
+        
+        service -> async: processApplicationAsync(applicationId)
+        activate async
+        note right of async: Async processing\nstarts immediately
+        deactivate async
+        
+        service -> service: mapper.toResponse(application)
+        service --> controller: ApplicationResponse
+        deactivate service
+        
+        controller --> api: 201 Created\n{application response}
+        deactivate controller
+        api --> customer: Success Response\n{applicationNumber, status: PENDING}
+        deactivate api
+    end
+end
+
+note over customer: Customer receives\napplication number\nfor tracking
+
+@enduml

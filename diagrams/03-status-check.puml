@@ -1,0 +1,99 @@
+@startuml Application Status Check
+title Credit Card Application Status Check Flow
+
+actor "Customer" as customer
+participant "API Gateway" as api
+participant "Application\nController" as controller
+participant "Application\nService" as service
+participant "Application\nRepository" as appRepo
+database "PostgreSQL\nDatabase" as db
+
+== Check Application Status ==
+
+customer -> api: GET /api/v1/credit-card-applications/{applicationNumber}
+activate api
+
+api -> controller: getApplication(applicationNumber)
+activate controller
+
+controller -> service: getApplication(applicationNumber)
+activate service
+
+service -> appRepo: findByApplicationNumber(applicationNumber)
+activate appRepo
+
+appRepo -> db: SELECT * FROM applications\nWHERE application_number = ?
+activate db
+
+alt Application Not Found
+    db --> appRepo: empty result
+    deactivate db
+    appRepo --> service: Optional.empty()
+    deactivate appRepo
+    
+    service -> service: throw ResourceNotFoundException
+    service --> controller: ResourceNotFoundException
+    deactivate service
+    
+    controller --> api: 404 Not Found\n{error: "Application not found"}
+    deactivate controller
+    
+    api --> customer: Error Response
+    deactivate api
+    
+else Application Found
+    db --> appRepo: application data
+    deactivate db
+    appRepo --> service: Optional<Application>
+    deactivate appRepo
+    
+    service -> service: mapper.toResponse(application)
+    service --> controller: ApplicationResponse
+    deactivate service
+    
+    controller --> api: 200 OK\n{application details}
+    deactivate controller
+    
+    api --> customer: Application Response
+    deactivate api
+    
+    note right of customer: Response includes:\n- Application number\n- Status (PENDING/APPROVED/REJECTED)\n- Customer name\n- Requested limit\n- Approved limit (if approved)\n- Credit score\n- Risk score\n- Decision reason\n- Created date\n- Decision date
+end
+
+== Alternative: Check by Email ==
+
+customer -> api: GET /api/v1/credit-card-applications/customer/{email}
+activate api
+
+api -> controller: getApplicationsByEmail(email)
+activate controller
+
+controller -> service: getApplicationsByEmail(email)
+activate service
+
+service -> appRepo: findByCustomerEmail(email)
+activate appRepo
+
+appRepo -> db: SELECT * FROM applications a\nJOIN customers c ON a.customer_id = c.id\nWHERE c.email = ?
+activate db
+
+db --> appRepo: list of applications
+deactivate db
+
+appRepo --> service: List<Application>
+deactivate appRepo
+
+service -> service: applications.stream()\n.map(mapper::toResponse)\n.collect(toList())
+
+service --> controller: List<ApplicationResponse>
+deactivate service
+
+controller --> api: 200 OK\n[{application1}, {application2}, ...]
+deactivate controller
+
+api --> customer: List of Applications
+deactivate api
+
+note right of customer: Returns all applications\nfor the email address\n(may be empty list)
+
+@enduml

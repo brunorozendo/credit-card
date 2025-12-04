@@ -1,0 +1,146 @@
+@startuml Risk Assessment Calculation
+title Risk Assessment Score Calculation
+
+participant "Application\nService" as service
+participant "Risk Assessment\nService" as risk
+participant "Credit Bureau\nReport" as report
+participant "Application" as app
+
+== Risk Score Calculation (0-100, lower is better) ==
+
+service -> risk: calculateRiskScore(application, creditReport)
+activate risk
+
+risk -> report: getCreditScore()
+activate report
+report --> risk: creditScore (300-850)
+deactivate report
+
+risk -> risk: **calculateCreditScoreRisk (35% weight)**
+note right
+Credit Score → Risk
+≥ 800 → 5 points
+≥ 740 → 15 points  
+≥ 670 → 30 points
+≥ 580 → 60 points
+< 580 → 90 points
+end note
+
+risk -> app: getAnnualIncome()
+activate app
+app --> risk: annualIncome
+deactivate app
+
+risk -> report: getMonthlyDebtPayments()
+activate report
+report --> risk: monthlyDebts
+deactivate report
+
+risk -> risk: **calculateDTIRisk (25% weight)**
+note right
+DTI = (monthlyDebts / monthlyIncome) × 100
+DTI ≤ 20% → 10 points
+DTI ≤ 30% → 25 points
+DTI ≤ 40% → 50 points
+DTI ≤ 50% → 75 points
+DTI > 50% → 95 points
+end note
+
+risk -> report: getNumberOfDelinquentAccounts()
+activate report
+report --> risk: delinquentCount
+deactivate report
+
+risk -> risk: **calculateDelinquencyRisk (20% weight)**
+note right
+Delinquent Accounts → Risk
+0 → 5 points
+1 → 40 points
+2 → 70 points
+≥ 3 → 95 points
+end note
+
+risk -> report: getCreditAccounts()
+activate report
+report --> risk: creditAccounts[]
+deactivate report
+
+risk -> risk: **calculateUtilizationRisk (15% weight)**
+note right
+For all credit cards:
+Total Balance / Total Limit × 100
+≤ 10% → 5 points
+≤ 30% → 20 points
+≤ 50% → 45 points
+≤ 70% → 70 points
+> 70% → 90 points
+end note
+
+risk -> report: getRecentInquiries()
+activate report
+report --> risk: inquiries[]
+deactivate report
+
+risk -> risk: **calculateInquiryRisk (5% weight)**
+note right
+Recent Inquiries → Risk
+≤ 1 → 10 points
+≤ 3 → 30 points
+≤ 5 → 60 points
+> 5 → 85 points
+end note
+
+risk -> risk: **Calculate Weighted Average**
+note right
+totalRisk = 
+  creditScoreRisk × 0.35 +
+  dtiRisk × 0.25 +
+  delinquencyRisk × 0.20 +
+  utilizationRisk × 0.15 +
+  inquiryRisk × 0.05
+
+Round to 2 decimal places
+end note
+
+risk --> service: riskScore (0-100)
+deactivate risk
+
+== Credit Limit Determination ==
+
+service -> risk: determineApprovedLimit(application, riskScore)
+activate risk
+
+risk -> app: getAnnualIncome()
+activate app
+app --> risk: annualIncome
+deactivate app
+
+risk -> risk: **Calculate Base Limit**
+note right: baseLimit = annualIncome × 0.2
+
+risk -> risk: **Apply Risk Multiplier**
+note right
+riskMultiplier = (100 - riskScore) / 100
+Example: riskScore 25 → multiplier 0.75
+end note
+
+risk -> risk: **Calculate Limit**
+note right: calculatedLimit = baseLimit × riskMultiplier
+
+risk -> app: getRequestedLimit()
+activate app
+app --> risk: requestedLimit
+deactivate app
+
+risk -> risk: **Final Limit**
+note right
+approvedLimit = MIN(calculatedLimit, requestedLimit)
+Round to nearest $500
+end note
+
+risk --> service: approvedLimit
+deactivate risk
+
+note over service: Example:\nIncome: $75,000\nRisk Score: 25\nBase: $15,000\nMultiplier: 0.75\nCalculated: $11,250\nRequested: $5,000\n**Approved: $5,000**
+
+@enduml

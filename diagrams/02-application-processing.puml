@@ -1,0 +1,157 @@
+@startuml Credit Card Application Processing
+title Credit Card Application Processing Flow (Async)
+
+participant "Async\nProcessor" as async
+participant "Application\nService" as service
+participant "Compliance\nService" as compliance
+participant "Credit Bureau\nClient" as bureau
+participant "Risk Assessment\nService" as risk
+participant "Application\nRepository" as appRepo
+database "PostgreSQL\nDatabase" as db
+
+== Async Application Processing ==
+
+activate async
+async -> service: processApplicationAsync(applicationId)
+activate service
+
+service -> appRepo: findById(applicationId)
+activate appRepo
+appRepo -> db: SELECT * FROM applications WHERE id = ?
+activate db
+db --> appRepo: application data
+deactivate db
+appRepo --> service: Optional<Application>
+deactivate appRepo
+
+alt Application Not Found
+    service -> service: log.error("Application not found")
+    service --> async: Exception
+else Application Found
+    service -> service: application.setStatus(IN_REVIEW)
+    service -> appRepo: save(application)
+    activate appRepo
+    appRepo -> db: UPDATE applications SET status = 'IN_REVIEW'
+    activate db
+    db --> appRepo: updated
+    deactivate db
+    appRepo --> service: saved
+    deactivate appRepo
+    
+    == Step 1: Compliance Checks ==
+    
+    service -> compliance: performComplianceCheck(customer)
+    activate compliance
+    
+    compliance -> compliance: performKycCheck()
+    note right: Verify:\n- Identity verified\n- SSN present\n- Address present
+    
+    compliance -> compliance: performAmlCheck()
+    note right: Check:\n- Transaction patterns\n- Source of funds\n- 95% pass rate (mocked)
+    
+    compliance -> compliance: performSanctionsCheck()
+    note right: Check against:\n- OFAC list\n- Sanctioned names\n- Banned entities
+    
+    compliance -> compliance: performPepCheck()
+    note right: Check for:\n- Political figures\n- Government officials\n- Public servants
+    
+    compliance -> compliance: ComplianceCheckResult
+    compliance --> service: ComplianceCheckResult
+    deactivate compliance
+    
+    alt Compliance Failed
+        service -> service: rejectApplication(reason)
+        service -> appRepo: save(rejected application)
+        activate appRepo
+        appRepo -> db: UPDATE applications SET status = 'REJECTED'
+        deactivate appRepo
+        service --> async: Application Rejected
+    else Compliance Passed
+        
+        == Step 2: Credit Bureau Check ==
+        
+        service -> bureau: getCreditReport(customer.ssn)
+        activate bureau
+        
+        bureau -> bureau: Thread.sleep(500-1000ms)
+        note right: Simulate API delay
+        
+        bureau -> bureau: generateMockCreditReport()
+        note right: Generate:\n- Credit score (300-850)\n- Credit accounts\n- Debt information\n- Recent inquiries
+        
+        bureau --> service: CreditBureauReport
+        deactivate bureau
+        
+        service -> service: application.setCreditScore(score)
+        
+        alt Credit Score < 580
+            service -> service: rejectApplication("Credit score below minimum")
+            service -> appRepo: save(rejected application)
+            service --> async: Application Rejected
+        else Credit Score >= 580
+            
+            == Step 3: Risk Assessment ==
+            
+            service -> risk: calculateRiskScore(application, creditReport)
+            activate risk
+            
+            risk -> risk: calculateCreditScoreRisk(35%)
+            risk -> risk: calculateDTIRisk(25%)
+            risk -> risk: calculateDelinquencyRisk(20%)
+            risk -> risk: calculateUtilizationRisk(15%)
+            risk -> risk: calculateInquiryRisk(5%)
+            
+            risk -> risk: weightedAverage()
+            risk --> service: riskScore (0-100)
+            deactivate risk
+            
+            service -> service: application.setRiskScore(riskScore)
+            
+            == Step 4: Decision Making ==
+            
+            alt Risk Score > 75
+                service -> service: rejectApplication("Risk score too high")
+                service -> appRepo: save(rejected application)
+                service --> async: Application Rejected
+            else Risk Score <= 75
+                
+                == Step 5: Approve Application ==
+                
+                service -> risk: determineApprovedLimit(application, riskScore)
+                activate risk
+                
+                risk -> risk: baseLimit = income * 0.2
+                risk -> risk: riskMultiplier = (100 - riskScore) / 100
+                risk -> risk: calculatedLimit = baseLimit * riskMultiplier
+                risk -> risk: approvedLimit = min(calculated, requested)
+                risk -> risk: round to nearest $500
+                
+                risk --> service: approvedLimit
+                deactivate risk
+                
+                service -> service: application.setStatus(APPROVED)
+                service -> service: application.setApprovedLimit(limit)
+                service -> service: application.setDecisionReason("Approved")
+                service -> service: application.setDecidedAt(now)
+                
+                service -> appRepo: save(approved application)
+                activate appRepo
+                appRepo -> db: UPDATE applications SET status = 'APPROVED'...
+                activate db
+                db --> appRepo: updated
+                deactivate db
+                appRepo --> service: saved
+                deactivate appRepo
+                
+                service --> async: Application Approved
+            end
+        end
+    end
+end
+
+deactivate service
+deactivate async
+
+note over async: Processing complete\nCustomer can check status\nvia API
+
+@enduml

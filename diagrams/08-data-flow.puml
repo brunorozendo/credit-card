@@ -1,0 +1,68 @@
+@startuml Data Flow Diagram
+!theme blueprint
+title Credit Card Application - Data Flow
+
+actor "Applicant" as applicant
+agent "API Gateway" as api
+database "Application\nDatabase" as appDB
+queue "Message Queue" as queue
+agent "Processing\nEngine" as engine
+agent "External\nServices" as external
+agent "Decision\nEngine" as decision
+agent "Notification\nService" as notify
+
+'== Data Flow ==
+
+applicant -right-> api : 1. Submit Application\n(Personal & Financial Data)
+note right: JSON Payload:\n- Name, SSN, DOB\n- Address, Phone, Email\n- Income, Employment\n- Requested Limit
+
+api -right-> appDB : 2. Store Application\n(Status: PENDING)
+note right: Generates:\n- Application ID\n- Application Number\n- Timestamp
+
+api -down-> queue : 3. Queue for Processing\n(Application ID)
+
+queue -right-> engine : 4. Async Processing
+
+engine -right-> appDB : 5. Update Status\n(IN_REVIEW)
+
+engine -down-> external : 6. External Checks
+note right: Parallel Requests:\n- Credit Bureau (Score, History)\n- KYC Verification\n- AML Screening\n- Sanctions Check
+
+external -left-> engine : 7. Check Results
+note left: Returns:\n- Credit Score: 300-850\n- Risk Flags\n- Compliance Status
+
+engine -down-> decision : 8. Risk Assessment
+note right: Calculates:\n- Risk Score (0-100)\n- DTI Ratio\n- Credit Utilization
+
+decision -left-> engine : 9. Decision
+note left: Returns:\n- APPROVED/REJECTED\n- Approved Limit\n- Reason
+
+engine -up-> appDB : 10. Update Application
+note right: Updates:\n- Final Status\n- Credit Score\n- Risk Score\n- Decision Reason\n- Approved Limit
+
+engine -right-> notify : 11. Send Notification
+note right: Triggers:\n- Email\n- SMS\n- Push Notification
+
+notify -up-> applicant : 12. Decision Notification
+
+applicant -down-> api : 13. Check Status\n(Application Number)
+
+api -down-> appDB : 14. Query Application
+
+appDB -up-> api : 15. Application Data
+
+api -up-> applicant : 16. Status Response
+
+'== Data Security ==
+
+note over api : **Data in Transit**\n- TLS 1.3 Encryption\n- Certificate Pinning
+
+note over appDB : **Data at Rest**\n- AES-256 Encryption\n- PII Masking\n- Audit Logs
+
+note over external : **External APIs**\n- OAuth 2.0\n- API Keys\n- IP Whitelisting
+
+== Data Retention ==
+
+note bottom of appDB : **Retention Policy**\n- Active Applications: Indefinite\n- Rejected Applications: 7 years\n- Audit Logs: 10 years\n- PII Deletion on request
+
+@enduml

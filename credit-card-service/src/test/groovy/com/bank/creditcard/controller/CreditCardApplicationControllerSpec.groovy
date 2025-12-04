@@ -140,6 +140,23 @@ class CreditCardApplicationControllerSpec extends Specification {
                 .andExpect(jsonPath('$.length()').value(2))
     }
 
+    def "should get applications by email failed"() {
+        given: "a customer email"
+        def email = "john.doe@example.com"
+        def applications = [createResponse("APPROVED"), createResponse("REJECTED")]
+
+        when: "retrieving applications by email"
+        def result = mockMvc.perform(get("/api/v1/credit-card-applications/customer/{email}", email))
+
+        then: "service returns applications"
+        1 * applicationService.getApplicationsByEmail(email) >> applications
+
+        and: "applications are returned"
+        result.andExpect(status().is(400))
+        result.andExpect(jsonPath('$').isArray())
+        result.andExpect(jsonPath('$.length()').value(2))
+    }
+
     def "should get pending applications"() {
         given: "pending applications exist"
         def applications = [createResponse("PENDING"), createResponse("PENDING")]
